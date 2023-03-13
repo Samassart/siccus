@@ -35,5 +35,7 @@ if __name__ == '__main__':
         datetime_to_match=datetime(2017, 5, 15),
         geom=Mabote_geom
     )
-    mabote_xarray_20170515.plot()
-    plt.show()
+
+
+    # test for NDVI
+    ndvi_directory = Path("/data/Drysat/Datasets/NDVI")
