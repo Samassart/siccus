@@ -139,4 +139,17 @@ class chirps_reader:
         
         return clipped_chirps_scene
     
-
+class cgls_reader:
+    """
+    reader for various cgls based dataset
+    Set the relevant dataset that you want
+    Currently supported
+    """
+    def __init__(
+            self,
+            directory:os.PathLike,
+            dataset:str
+    ) -> None:
+        self.directory: directory
+        self.dataframe_values = {}
+        for file_dir in sorted(directory.glob("chirps*")):
