@@ -1,5 +1,5 @@
 import pandas as pd
-
+from datetime import datetime
 def from_day_to_dekad(day:int) -> int:
     # dekad analysis
     dekad_to_day_dict = {
@@ -20,22 +20,6 @@ def from_day_to_dekad(day:int) -> int:
         if dekad_to_test > 10:
             raise ValueError("Bug")
 
-
-def filter_dataframe(
-        dataframe:pd.DataFrame,
-        start_threshold:str,
-        end_threshold:str
-    ) -> pd.DataFrame:
-    # filter the dekad
-    half_filtered_dataframe = dataframe[
-        dataframe.index > int(start_threshold)
-        ]
-    filtered_dataframe = half_filtered_dataframe[
-        half_filtered_dataframe.index < int(end_threshold)
-        ]
-
-    return filtered_dataframe
-
 def from_dekad_to_day(dekad:int) ->int:
     if dekad==1:
         day = 5
@@ -46,3 +30,37 @@ def from_dekad_to_day(dekad:int) ->int:
     else:
         raise ValueError("Dekad is likely wrong")
     return day
+
+
+def filter_dataframe(
+        dataframe:pd.DataFrame,
+        start_threshold:str,
+        end_threshold:str
+    ) -> pd.DataFrame:
+    # filter the dekad
+    half_filtered_dataframe = dataframe[
+        dataframe.index > int(start_threshold)
+        ]
+
+    filtered_dataframe = half_filtered_dataframe[
+        half_filtered_dataframe.index < int(end_threshold)
+        ]
+
+    return filtered_dataframe
+
+
+def datetime_to_year_month_dekad(
+    datetime_input:datetime
+    ) -> int:
+        # first convert the day into dekad*
+        dekad = from_day_to_dekad(datetime_input.day)
+        # get filtering values
+        year_month_dekad = (
+            f"{datetime_input.year:04d}"
+            + f"{datetime_input.month:02d}" 
+            + f"{dekad}"
+            )
+
+        return year_month_dekad
+
+
