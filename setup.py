@@ -1,15 +1,15 @@
 from setuptools import setup, find_packages
+with open('requirements.txt') as f:
+    requirements = f.read().splitlines()
 
 setup(
     name='siccus',
     version='1.0.0',
-    description='A description of your package',
-    author='Your Name',
-    author_email='your@email.com',
+    description='Scripts relevant to the DRYSAT project',
+    author='Samuel Massart',
+    author_email='samuel.massart@geo.tuwien.ac.at',
     packages=find_packages(),
-    install_requires=[
-        # list any dependencies your package requires
-    ],
+    install_requires=requirements
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
