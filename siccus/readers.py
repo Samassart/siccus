@@ -1,9 +1,9 @@
-from reader_functions import environmental_dataset
+from .reader_functions import environmental_dataset
 import pandas as pd
 import os
 import zipfile
 from pathlib import Path
-from temporal_function import (
+from .temporal_function import (
     from_year_and_doy_to_datetime,
     from_day_to_dekad,
     )
