@@ -9,7 +9,7 @@ setup(
     author='Samuel Massart',
     author_email='samuel.massart@geo.tuwien.ac.at',
     packages=find_packages(),
-    install_requires=requirements
+    install_requires=requirements,
     classifiers=[
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
