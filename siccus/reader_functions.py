@@ -1,13 +1,13 @@
 import os
 from datetime import datetime
 import pandas as pd
-from temporal_function import (
+from .temporal_function import (
     from_day_to_dekad,
     from_dekad_to_day,
     filter_dataframe,
     datetime_to_year_month_dekad
     )
-from spatial_function import read_bbox
+from .spatial_function import read_bbox
 from tqdm import tqdm
 import rioxarray as rio
 import xarray as xr
