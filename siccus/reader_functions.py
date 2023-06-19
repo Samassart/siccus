@@ -1,13 +1,13 @@
 import os
 from datetime import datetime
 import pandas as pd
-from .temporal_function import (
+from temporal_function import (
     from_day_to_dekad,
     from_dekad_to_day,
     filter_dataframe,
     datetime_to_year_month_dekad
     )
-from .spatial_function import read_bbox
+from spatial_function import read_bbox
 from tqdm import tqdm
 import rioxarray as rio
 import xarray as xr
@@ -55,6 +55,7 @@ class environmental_dataset:
         dataframe_values_dt.index = datetime_index_dt
 
         #
+        dataframe_values_dt = dataframe_values_dt.sort_index()
         idx = dataframe_values_dt.index[
             dataframe_values_dt.index.get_indexer(
                 [datetime_to_match], method='nearest'
@@ -98,6 +99,7 @@ class environmental_dataset:
             filtered_dataset = self.dataframe_values
         timeseries_to_extract = {}
         preprocessed_data = None
+
         for file in filtered_dataset.iterrows():
             # get time values
             file_to_extract_date = str(file[0])
@@ -340,4 +342,6 @@ class environmental_dataset:
         # and finally 0 to nan
         categorical_drought_map = categorical_drought_map.where(categorical_drought_map > 0.1)
         return categorical_drought_map, category_for_plot
+    
+
     
