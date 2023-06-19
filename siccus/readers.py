@@ -1,9 +1,9 @@
-from .reader_functions import environmental_dataset
+from reader_functions import environmental_dataset
 import pandas as pd
 import os
 import zipfile
 from pathlib import Path
-from .temporal_function import (
+from temporal_function import (
     from_year_and_doy_to_datetime,
     from_day_to_dekad,
     )
@@ -78,6 +78,46 @@ class chirps_reader(environmental_dataset):
             {"file_name":self.dataframe_values.values()},
             index=self.dataframe_values.keys()
             )
+        
+class sentinel_reader(environmental_dataset):
+    """
+    Class to read Sentinel-1 data (500m resolution)
+    For the time being, split by tiles as no global scenes are 
+    available...
+    """
+    def __init__(
+            self,
+            directory:os.PathLike,
+            dataset:str,
+            tile:str
+    ) -> None:
+        self.directory=directory
+        self.dataset=dataset
+
+        # initialize datacube
+        self.dataframe_values = {}
+
+        # deep directory when working with Sentinel-1
+        directory_for_iteration = Path(str(self.directory) + f"/V01M01/AF500M/{tile}/")
+
+        for files in sorted(directory_for_iteration.glob("*")):
+            files_data = str(files.stem).split("_")
+
+            # aux filter 
+            if files_data[-1] == "aux":
+                continue
+
+            full_filename = files
+            # create the index datetime+dekad composite
+            datetime_string = files_data[1]
+            dekad_string = str(from_day_to_dekad(int(datetime_string.split("T")[1][0:2])))
+            datetime_str = datetime_string[0:6]
+
+            self.dataframe_values[int(datetime_str+dekad_string)] = (full_filename)
+        self.dataframe_values = pd.DataFrame(
+            {"file_name":self.dataframe_values.values()},
+            index=self.dataframe_values.keys()
+        )
 
 class cgls_reader(environmental_dataset):
     """
@@ -169,5 +209,7 @@ class cgls_reader(environmental_dataset):
             {"file_name":self.dataframe_values.values()},
             index=self.dataframe_values.keys()
             ).sort_index()
+
+
 
 
