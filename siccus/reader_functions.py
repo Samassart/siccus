@@ -1,14 +1,15 @@
 import os
 from datetime import datetime
 import pandas as pd
-from temporal_function import (
+from .temporal_function import (
     from_day_to_dekad,
     from_dekad_to_day,
     filter_dataframe,
     datetime_to_year_month_dekad
     )
-from spatial_function import read_bbox
+from .spatial_function import read_bbox
 from tqdm import tqdm
+from typing import List
 import rioxarray as rio
 import xarray as xr
 from shapely import geometry
@@ -245,103 +246,157 @@ class environmental_dataset:
 
             self.percentiles_layer[percentile_to_process] = percentiles_array
 
-    def process_percentiles_chunk(
-        self,
-        file_type:str,
-        output_directory:os.PathLike,
-        geom:geometry.multipolygon.MultiPolygon | geometry.polygon.Polygon = None,
-        chunk_size:int = None,
-        percentiles:list[float] = [], 
-        no_data:list = None,
-        region_id:str = "full_data",
-        ):
-        if file_type == "tif":
-            import rasterio
-            percentiles = [10, 25, 50, 75, 90]
 
-            # define the chunk size for reading the data from the raster layer
-            chunk_size = 256
+    def process_tiff_files(self, tiff_files, chunk_size):
+        # Create an empty list to store the DataArrays for each file
+        data_arrays = []
+        
+        # Open all TIFF files and concatenate into a single DataArray along the time dimension
+        print("Loading the information for quantile processing...")
+        for tiff_file in tqdm(tiff_files):
+            # Open the TIFF file as a DataArray
+            da = xr.open_rasterio(tiff_file, chunks={'x': chunk_size, 'y': chunk_size})
 
-            # loop over each .tif layer in the list
-            for layer_path in tqdm(self.dataframe_values["file_name"]):
-                # open the .tif layer using rasterio
-                with rasterio.open(layer_path) as src:
-                    # calculate the total number of chunks for the raster layer
-                    num_chunks = (src.height // chunk_size + 1) * (src.width // chunk_size + 1)
-                    # initialize a list to store the percentile values for each chunk
-                    percentile_list = []
-                    # loop over each chunk of the raster layer
-                    for i, window in tqdm(enumerate(src.block_windows(window_size=chunk_size, nodata=src.nodata)), total=num_chunks):
-                        # get the window indices
-                        row_start, col_start = window.ul[0], window.ul[1]
-                        row_stop, col_stop = window.lr[0], window.lr[1]
-                        # read the pixel values for the current chunk into a numpy array
-                        pixel_array = src.read(window=window)
-                        # reshape the numpy array to have two dimensions: pixel values and temporal values
-                        pixel_array = pixel_array.reshape(pixel_array.shape[1], -1)
-                        # calculate the percentiles along the second dimension
-                        percentile_values = np.percentile(pixel_array, percentiles, axis=1)
-                        # append the percentile values to the list for this layer
-                        percentile_list.append(percentile_values)
-                    # concatenate the percentile values for all chunks into a single numpy array
-                    percentile_values = np.concatenate(percentile_list, axis=1)
-                    # store the percentile values in a list or numpy array
-                    # you can use the layer_path as the key if you want to keep track of which layer each percentile value corresponds to
-                    # e.g., percentile_dict[layer_path] = percentile_values
-                    # or, if you just want a list of percentile values:
-                    print(percentile_values)
-    def compare_scene_to_percentiles_map(
-            self,
-            map_to_categorize:xr.DataArray,
-            percentile_directories:os.PathLike,
-            percentiles_to_use:list[float | int], # put in order
-            region_id:str = "full_data",
-            geom:geometry.multipolygon.MultiPolygon | geometry.polygon.Polygon = None,
-            cat_val:int = 1
-        ) -> xr.DataArray:
-        """
-        Take a scene, and create a categorical drought map
-        """
-        # sort the percentile, key to the process 
-        percentiles_to_use.sort(reverse = True)
+            # Mask values equal to -9999
+            masked_data = da.where(da != -9999, drop=False)
+            data_arrays.append(masked_data)
+            
+        # Concatenate the DataArrays along the time dimension
+        ds = xr.concat(data_arrays, dim='time')
+ 
+        ds = ds.sel(band = 1)
 
-        # initialise multicategorical drought map variable and dict of category
-        categorical_drought_map = None
-        category_for_plot = {}
-        # first check if the percentile map exist, if not, call the percentile function first
-        for idx, percentile_analysed in enumerate(percentiles_to_use):
-            # take care of the category dictionary
-            category_for_plot[idx+1] = percentile_analysed
+        ds = ds.chunk({"time": -1, "x": chunk_size, "y": chunk_size})
 
-            if os.path.isdir(percentile_directories):
-                file_for_perc = str(percentile_directories) + "/" + f"{self.dataset}_p{percentile_analysed}_{region_id}.tif"
-                if os.path.isfile(file_for_perc):
-                    percentile_scene = rio.open_rasterio(file_for_perc)
-                else:
-                    print(f"Percentiles {percentile_analysed} not found, start the processing")
-                    if geom is None:
-                        raise ValueError("Percentiles not processed, please add the geometry for the processing.")
-                    else:
-                        self.process_percentiles(
-                            output_directory=percentile_directories,
-                            geom=geom,
-                            percentiles=[percentile_analysed],
-                            no_data=[255, 241],
-                            region_id = region_id
-                            )
+        # Calculate mean along the time axis, ignoring -9999 values
+        mean_data = ds.mean(dim='time')
+        print(mean_data.values)
+        # Calculate variance along the time axis, ignoring -9999 values
+        variance_data = ds.var(dim='time')
 
-                    percentile_scene = rio.open_rasterio(file_for_perc)
+        # Calculate standard deviation along the time axis, ignoring -9999 values
+        std_data = ds.std(dim='time')
 
-            # Compare the scenes
-            if categorical_drought_map is None:
-                categorical_drought_map = xr.where(map_to_categorize < percentile_scene, 1, 0)
-            else:
-                categorical_drought_map_to_add = xr.where(map_to_categorize < percentile_scene, 1, 0)
-                categorical_drought_map += categorical_drought_map_to_add
+        # Calculate quantiles along the time axis, ignoring -9999 values
+        quantiles_data = ds.quantile([0.9, 0.5, 0.1], dim='time')
 
-        # and finally 0 to nan
-        categorical_drought_map = categorical_drought_map.where(categorical_drought_map > 0.1)
-        return categorical_drought_map, category_for_plot
+
+        # actual computing
+        print("Mean value processing")
+        mean_data.compute()
+        print("Variance value processing")
+        variance_data.compute()
+        print("Std_dev value processing")
+        std_data.compute()
+        print("quantiles value processing")
+        quantiles_data.compute()
+
+        return mean_data, variance_data, std_data, quantiles_data
+
     
+    def process_statistics(
+        self,
+        start_time:str = 0,
+        end_time:str = 0,
+        chunk_size:int = 600,
+        saving_directory:os.PathLike = None,
+    ) -> List[xr.DataArray]:
+        """
+        Process quantiles from rioxarray
+        """
+        complete_tiff_list  = []
+        processing_status = False
+        if start_time == end_time == 0:
+            # entire dataset considered
+            filtered_dataframe = self.dataframe_values
+        else:
+            filtered_dataframe = filter_dataframe(self.dataframe_values, start_time, end_time)
+
+        for files in filtered_dataframe.iterrows():
+            if "aux" in str(files[1].file_name):
+                pass
+            else:
+                complete_tiff_list.append(files[1].file_name)
+
+        # here a check if relevant
+        data_to_save = {"mean_data", "variance_data", "std_data", "quantiles_data"}
+        for name in data_to_save:
+            file_to_be_checked = f"{saving_directory}/{name}.tif"
+            if os.path.isfile(file_to_be_checked):
+                print(f"{file_to_be_checked} already processed")
+                processing_status = True
+                continue
+            else:
+                processing_status = False
+                break
+
+        if not processing_status:
+            # processing step
+            mean_data, variance_data, std_data, quantiles_data = self.process_tiff_files(complete_tiff_list, chunk_size)
+            
+            # saving time
+            if not os.path.isdir(saving_directory):
+                os.makedirs(saving_directory)
+
+            # Create a dictionary of the DataArrays you want to save
+            data_arrays = {
+                "mean_data": mean_data,
+                "variance_data": variance_data,
+                "std_data": std_data,
+                "quantiles_data": quantiles_data
+            }
+
+            # Loop through the data arrays and save them as GeoTIFF files
+            for name, data_array in data_arrays.items():
+                file_path = f"{saving_directory}/{name}.tif"
+                data_array.rio.to_raster(file_path)
+                print(f"Saved {name} as GeoTIFF: {file_path}")        
+
+            
+
+    def process_anomaly(
+        self,
+        start_time:str = 0,
+        end_time:str = 0,
+        chunk_size:int = 600,
+    ) -> xr.Dataset:
+        """
+        Process dekadal anomalies based on S1
+        """
+        # Create an empty list to store the DataArrays for each file
+        data_arrays = []
+        complete_tiff_list  = []
+        processing_status = False
+        if start_time == end_time == 0:
+            # entire dataset considered
+            filtered_dataframe = self.dataframe_values
+        else:
+            filtered_dataframe = filter_dataframe(self.dataframe_values, start_time, end_time)
+
+        for files in filtered_dataframe.iterrows():
+            if "aux" in str(files[1].file_name):
+                pass
+            else:
+                complete_tiff_list.append(files[1].file_name)
+        # 
+        for tiff_file in tqdm(complete_tiff_list):
+            # Open the TIFF file as a DataArray
+            da = xr.open_rasterio(tiff_file, chunks={'x': chunk_size, 'y': chunk_size})
+
+            # Mask values equal to -9999
+            masked_data = da.where(da != -9999, drop=False)
+            data_arrays.append(masked_data)
+
+        # Concatenate the DataArrays along the time dimension
+        ds = xr.concat(data_arrays, dim='time')
+        ds = ds.sel(band = 1)
+        ds = ds.chunk({"time": -1, "x": chunk_size, "y": chunk_size})
+
+        print(ds)
+        # And now resample to dekadal values and get mean
+        ds_grouped = ds.resample(time="10D").mean(dim="time")
+        print(ds_grouped)
+        ds_dekadal = ds_grouped.mean(dim="time")
+        return ds_dekadal
 
     
